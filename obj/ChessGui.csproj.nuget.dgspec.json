@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\בועז\\Desktop\\C#\\chessgui\\ChessGui.csproj": {}
+    "C:\\Users\\בועז\\Desktop\\C#\\ChessGui\\ChessGui.csproj": {}
   },
   "projects": {
-    "C:\\Users\\בועז\\Desktop\\C#\\chessgui\\ChessGui.csproj": {
+    "C:\\Users\\בועז\\Desktop\\C#\\ChessGui\\ChessGui.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\בועז\\Desktop\\C#\\chessgui\\ChessGui.csproj",
+        "projectUniqueName": "C:\\Users\\בועז\\Desktop\\C#\\ChessGui\\ChessGui.csproj",
         "projectName": "ChessGui",
-        "projectPath": "C:\\Users\\בועז\\Desktop\\C#\\chessgui\\ChessGui.csproj",
+        "projectPath": "C:\\Users\\בועז\\Desktop\\C#\\ChessGui\\ChessGui.csproj",
         "packagesPath": "C:\\Users\\בועז\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\בועז\\Desktop\\C#\\chessgui\\obj\\",
+        "outputPath": "C:\\Users\\בועז\\Desktop\\C#\\ChessGui\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\בועז\\AppData\\Roaming\\NuGet\\NuGet.Config"
