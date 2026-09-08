@@ -1,0 +1,14 @@
+C:\Users\בועז\Desktop\C#\ChessGui\bin\Debug\net10.0-windows\ChessGui.exe
+C:\Users\בועז\Desktop\C#\ChessGui\bin\Debug\net10.0-windows\ChessGui.deps.json
+C:\Users\בועז\Desktop\C#\ChessGui\bin\Debug\net10.0-windows\ChessGui.runtimeconfig.json
+C:\Users\בועז\Desktop\C#\ChessGui\bin\Debug\net10.0-windows\ChessGui.dll
+C:\Users\בועז\Desktop\C#\ChessGui\bin\Debug\net10.0-windows\ChessGui.pdb
+C:\Users\בועז\Desktop\C#\ChessGui\obj\Debug\net10.0-windows\ChessGui.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\בועז\Desktop\C#\ChessGui\obj\Debug\net10.0-windows\ChessGui.AssemblyInfoInputs.cache
+C:\Users\בועז\Desktop\C#\ChessGui\obj\Debug\net10.0-windows\ChessGui.AssemblyInfo.cs
+C:\Users\בועז\Desktop\C#\ChessGui\obj\Debug\net10.0-windows\ChessGui.csproj.CoreCompileInputs.cache
+C:\Users\בועז\Desktop\C#\ChessGui\obj\Debug\net10.0-windows\ChessGui.dll
+C:\Users\בועז\Desktop\C#\ChessGui\obj\Debug\net10.0-windows\refint\ChessGui.dll
+C:\Users\בועז\Desktop\C#\ChessGui\obj\Debug\net10.0-windows\ChessGui.pdb
+C:\Users\בועז\Desktop\C#\ChessGui\obj\Debug\net10.0-windows\ChessGui.genruntimeconfig.cache
+C:\Users\בועז\Desktop\C#\ChessGui\obj\Debug\net10.0-windows\ref\ChessGui.dll
