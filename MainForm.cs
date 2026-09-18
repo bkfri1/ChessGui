@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Net;
+using System.Net.Sockets;
 
 
 namespace ChessGui;
@@ -127,12 +129,23 @@ public partial class MainForm : Form
     
     private async void ConnectButtonClicked(object? sender, EventArgs e)
     {
-        statusLabel.Text = "Connecting...";
-        await networkManager.ConnectAsync(
-            "127.0.0.1",
-            5000
-        );
+    statusLabel.Text = "Searching for host on local network...";
+
+    // 1. Scan LAN for the host
+    string? serverIp = await networkManager.DiscoverServerIpAsync(timeoutMs: 3000);
+
+    // 2. If not found locally on another host, fall back to localhost (for local testing)
+    if (serverIp == null)
+    {
+        Console.WriteLine("Host not found via UDP broadcast. Fallback to 127.0.0.1");
+        serverIp = "127.0.0.1";
     }
+
+    statusLabel.Text = $"Connecting to {serverIp}...";
+    await networkManager.ConnectAsync(serverIp, 5000);
+}
+    
+    
     private void NetworkConnected()
     {
         if (InvokeRequired)
@@ -386,9 +399,13 @@ public partial class MainForm : Form
             return;
         }
 
-        ChessGui.Move? move = ChessGui.Move.Parse(message);
+        ChessGui.Move? move;
 
-        if(move == null)
+        try
+        {
+            move = ChessGui.Move.Parse(message);
+        }
+        catch (Exception)
         {
             statusLabel.Text = "Received invalid move.";
             return;
@@ -399,6 +416,11 @@ public partial class MainForm : Form
 
         if(success)
         {
+            if (move.PromotionType.HasValue)
+            {
+                board.Squares[move.ToRow, move.ToCol] = new Piece(move.PromotionType.Value, movedPiece.Color);
+            }
+
             RefreshBoard();
             UpdateTimersForTurn();
             statusLabel.Text =
@@ -704,9 +726,53 @@ public partial class MainForm : Form
         Move move = new Move(selectedRow, selectedCol, row, col);
 
         bool success = board.MovePiece(move);
+        PieceType? selectedPromotionType = null;
 
         if (success)
         {
+            bool isPromotionMove = board.Squares[move.ToRow, move.ToCol].Type == PieceType.Pawn &&
+                (move.ToRow == 0 || move.ToRow == 7);
+
+            if (isPromotionMove)
+            {
+                MoveRecord lastMove = board.MoveHistory[^1];
+                Piece promotedPawn = board.Squares[lastMove.Move.ToRow, lastMove.Move.ToCol];
+
+                Dictionary<string, Image> promotionImages = new Dictionary<string, Image>();
+                string colorName = promotedPawn.Color == PieceColor.White ? "white" : "black";
+                foreach (PieceType pieceType in new[] { PieceType.Queen, PieceType.Rook, PieceType.Bishop, PieceType.Knight })
+                {
+                    string type = pieceType switch
+                    {
+                        PieceType.Rook => "rook",
+                        PieceType.Knight => "knight",
+                        PieceType.Bishop => "bishop",
+                        PieceType.Queen => "queen",
+                        _ => ""
+                    };
+                    string path = Path.Combine("Images", $"{colorName}-{type}.png");
+                    if (File.Exists(path))
+                    {
+                        string imageKey = $"{colorName}{type}";
+                        promotionImages[imageKey] = Image.FromFile(path);
+                    }
+                }
+
+                using PromotionForm promotionForm =
+                    new PromotionForm(promotedPawn.Color, promotionImages);
+
+                DialogResult result = promotionForm.ShowDialog(this);
+
+                if (result == DialogResult.OK || result == DialogResult.Cancel || result == DialogResult.None)
+                {
+                    selectedPromotionType = promotionForm.SelectedPieceType;
+                    board.Squares[lastMove.Move.ToRow, lastMove.Move.ToCol] = new Piece(selectedPromotionType.Value, promotedPawn.Color);
+                    statusLabel.Text = $"Pawn promoted to {selectedPromotionType.Value}.";
+                }
+            }
+
+            move.PromotionType = selectedPromotionType;
+
             // Send the move over the network
             await networkManager.SendMessageAsync(move.ToString());
 
@@ -720,47 +786,6 @@ public partial class MainForm : Form
         {
             statusLabel.Text = "Illegal move.";
             return;
-        }
-
-        if (board.PawnPromotion(move))
-        {
-            MoveRecord lastMove = board.MoveHistory[^1];
-
-            Piece promotedPawn = board.Squares[lastMove.Move.ToRow, lastMove.Move.ToCol];
-            
-            Dictionary<string, Image> promotionImages = new Dictionary<string, Image>();
-            string colorName = promotedPawn.Color == PieceColor.White ? "white" : "black";
-            foreach (PieceType pieceType in new[] { PieceType.Queen, PieceType.Rook, PieceType.Bishop, PieceType.Knight })
-            {
-                string type = pieceType switch
-                {
-                    PieceType.Rook => "rook",
-                    PieceType.Knight => "knight",
-                    PieceType.Bishop => "bishop",
-                    PieceType.Queen => "queen",
-                    _ => ""
-                };
-                string path = Path.Combine("Images", $"{colorName}-{type}.png");
-                if (File.Exists(path))
-                {
-                    // Match the key format used by PromotionForm's GetImageKey method: "whitequeen", "blackrook", etc.
-                    string imageKey = $"{colorName}{type}";
-                    promotionImages[imageKey] = Image.FromFile(path);
-                }
-            }
-
-            using PromotionForm promotionForm = 
-                new PromotionForm(promotedPawn.Color, promotionImages);
-
-            DialogResult result = promotionForm.ShowDialog(this);
-
-            if (result == DialogResult.OK)
-            {
-                PieceType selectedPieceType = promotionForm.SelectedPieceType;
-                board.Squares[lastMove.Move.ToRow, lastMove.Move.ToCol] = new Piece(selectedPieceType, promotedPawn.Color);
-                statusLabel.Text = $"Pawn promoted to {selectedPieceType}.";
-                RefreshBoard();
-            }
         }
 
         if (HandleGameStateAfterMove())

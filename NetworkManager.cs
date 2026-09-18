@@ -1,6 +1,11 @@
+using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace ChessGui;
 
@@ -9,6 +14,11 @@ public class NetworkManager
     private TcpListener? listener;
     private TcpClient? client;
     private NetworkStream? stream;
+
+    private CancellationTokenSource? discoveryCts;
+    private const int DiscoveryPort = 5001;
+    private const string DiscoveryRequest = "CHESS_SERVER_DISCOVERY_REQ";
+    private const string DiscoveryResponse = "CHESS_SERVER_DISCOVERY_RES";
 
     private bool isRunning;
 
@@ -20,14 +30,84 @@ public class NetworkManager
         }
     }
 
-    // MainForm יוכל להירשם לאירוע הזה
     public event Action<string>? MessageReceived;
-
-    // אירוע כאשר נוצר חיבור
     public event Action? Connected;
-
-    // אירוע כאשר החיבור נסגר או נופל
     public event Action? Disconnected;
+
+    // --- AUTOMATIC SERVER DISCOVERY METHOD ---
+    public async Task<string?> DiscoverServerIpAsync(int timeoutMs = 3000)
+    {
+        using UdpClient udpClient = new UdpClient();
+        udpClient.EnableBroadcast = true;
+
+        byte[] requestBytes = Encoding.UTF8.GetBytes(DiscoveryRequest);
+        IPEndPoint broadcastEndpoint = new IPEndPoint(IPAddress.Broadcast, DiscoveryPort);
+
+        try
+        {
+            // Send broadcast request across the LAN
+            await udpClient.SendAsync(requestBytes, requestBytes.Length, broadcastEndpoint);
+
+            using var cts = new CancellationTokenSource(timeoutMs);
+
+            // Wait for response from host
+            UdpReceiveResult result = await udpClient.ReceiveAsync(cts.Token);
+            string response = Encoding.UTF8.GetString(result.Buffer);
+
+            if (response == DiscoveryResponse)
+            {
+                return result.RemoteEndPoint.Address.ToString();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Timeout reached, host not found
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Discovery error: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    // --- UDP BEACON LISTENER FOR SERVER ---
+    private void StartDiscoveryBeacon()
+    {
+        discoveryCts = new CancellationTokenSource();
+        CancellationToken token = discoveryCts.Token;
+
+        Task.Run(async () =>
+        {
+            using UdpClient udpServer = new UdpClient();
+            udpServer.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            udpServer.Client.Bind(new IPEndPoint(IPAddress.Any, DiscoveryPort));
+
+            byte[] responseBytes = Encoding.UTF8.GetBytes(DiscoveryResponse);
+
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    UdpReceiveResult result = await udpServer.ReceiveAsync(token);
+                    string message = Encoding.UTF8.GetString(result.Buffer);
+
+                    if (message == DiscoveryRequest)
+                    {
+                        await udpServer.SendAsync(responseBytes, responseBytes.Length, result.RemoteEndPoint);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Beacon error: {ex.Message}");
+                }
+            }
+        }, token);
+    }
 
     public async Task StartServerAsync(int port)
     {
@@ -38,10 +118,17 @@ public class NetworkManager
 
             isRunning = true;
 
+            // Start listening for UDP client discovery requests
+            StartDiscoveryBeacon();
+
             Console.WriteLine($"Server started on port {port}");
             Console.WriteLine("Waiting for client...");
 
             client = await listener.AcceptTcpClientAsync();
+            
+            // Stop discovery beacon once a client successfully connects
+            StopDiscoveryBeacon();
+
             stream = client.GetStream();
 
             Console.WriteLine("Client connected!");
@@ -52,7 +139,11 @@ public class NetworkManager
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Server error: {ex.Message}");
+            MessageBox.Show(
+                ex.Message,
+                "Server error"
+            );
+
             Disconnect();
         }
     }
@@ -78,7 +169,11 @@ public class NetworkManager
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Connection error: {ex.Message}");
+            MessageBox.Show(
+                ex.Message,
+                "Connection error"
+            );
+
             Disconnect();
         }
     }
@@ -93,9 +188,7 @@ public class NetworkManager
 
         try
         {
-            // \n מסמן סוף הודעה
             string messageWithEnding = message + "\n";
-
             byte[] data = Encoding.UTF8.GetBytes(messageWithEnding);
 
             await stream.WriteAsync(data, 0, data.Length);
@@ -128,7 +221,6 @@ public class NetworkManager
                     buffer.Length
                 );
 
-                // 0 אומר שהצד השני סגר את החיבור
                 if (bytesRead == 0)
                     break;
 
@@ -140,12 +232,9 @@ public class NetworkManager
 
                 receivedData.Append(text);
 
-                // TCP הוא Stream ולכן הודעה יכולה להגיע בחלקים
-                // אנחנו מפרידים הודעות לפי \n
                 while (receivedData.ToString().Contains('\n'))
                 {
                     string allData = receivedData.ToString();
-
                     int newlineIndex = allData.IndexOf('\n');
 
                     string message = allData
@@ -181,11 +270,19 @@ public class NetworkManager
         }
     }
 
+    private void StopDiscoveryBeacon()
+    {
+        discoveryCts?.Cancel();
+        discoveryCts?.Dispose();
+        discoveryCts = null;
+    }
+
     public void Disconnect()
     {
         bool wasConnected = IsConnected || isRunning;
 
         isRunning = false;
+        StopDiscoveryBeacon();
 
         try
         {
@@ -195,7 +292,7 @@ public class NetworkManager
         }
         catch
         {
-            // בזמן סגירה אין צורך להפיל את התוכנית
+            // Ignore clean-up exceptions
         }
 
         stream = null;

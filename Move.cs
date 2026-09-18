@@ -5,6 +5,7 @@ class Move
     public int FromCol { get; set; }
     public int ToRow { get; set; }
     public int ToCol { get; set; }
+    public PieceType? PromotionType { get; set; }
 
     public Move(int fromRow, int fromCol, int toRow, int toCol)
     {
@@ -15,18 +16,37 @@ class Move
     }
     public override string ToString()
     {
-        return $"{FromRow},{FromCol},{ToRow},{ToCol}";
+        string moveText = $"{FromRow},{FromCol},{ToRow},{ToCol}";
+
+        if (PromotionType.HasValue)
+        {
+            return $"{moveText},{PromotionType.Value}";
+        }
+
+        return moveText;
     }
     public static Move Parse(string moveString)//gives e2 e4 as input and returns a Move object with the corresponding from and to coordinates
     {
         string[] parts = moveString.Split(',');
+
+        if (parts.Length < 4 || parts.Length > 5)
+        {
+            throw new FormatException($"Invalid move format: '{moveString}'");
+        }
 
         int fromRow = int.Parse(parts[0]);
         int fromCol = int.Parse(parts[1]);
         int toRow = int.Parse(parts[2]);
         int toCol = int.Parse(parts[3]);
 
-        return new Move(fromRow, fromCol, toRow, toCol);
+        Move move = new Move(fromRow, fromCol, toRow, toCol);
+
+        if (parts.Length == 5 && Enum.TryParse<PieceType>(parts[4], true, out PieceType promotionType))
+        {
+            move.PromotionType = promotionType;
+        }
+
+        return move;
     }
 
 }
